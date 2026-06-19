@@ -1,0 +1,275 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plants</title>
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial;
+      margin: 0;
+      background: #f6f6f8;
+      color: #1c1c1e;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    h2 {
+      text-align: center;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .input-card {
+      background: white;
+      padding: 12px;
+      border-radius: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 16px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0;
+      border: 1px solid #e5e5ea;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 500;
+      color: white;
+    }
+
+    .add-btn { background: #ff8c42; }
+    .water-btn { background: #34c759; }
+    .back-btn { background: #444; }
+    .save-btn { background: #007aff; }
+    .delete-btn { background: #ff3b30; }
+
+    /* 🔥 GRID */
+    #list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .card {
+      border-radius: 16px;
+      padding: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      transition: transform 0.1s ease;
+      min-height: 80px;
+    }
+
+    .card:active {
+      transform: scale(0.98);
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .status {
+      font-size: 13px;
+      margin-top: 6px;
+      font-weight: 600;
+    }
+
+    .normal { background: white; }
+    .warning { background: #fff6d6; }
+    .danger { background: #ffe5e5; }
+
+    .meta {
+      font-size: 14px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>Ольикины цветулечечки</h2>
+
+  <div class="input-card">
+    <input id="name" placeholder="цветок" />
+    <input id="days" type="number" placeholder="интервал полива" />
+    <input id="lastWatering" type="date" />
+    <button class="add-btn" onclick="addPlant()">добавить</button>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script>
+  let plants = JSON.parse(localStorage.getItem("plants") || "[]");
+  let selectedPlantIndex = null;
+
+  function save() {
+    localStorage.setItem("plants", JSON.stringify(plants));
+  }
+
+  function getDaysLeft(p) {
+    const next = new Date(p.lastWatering);
+    next.setDate(next.getDate() + p.interval);
+
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    next.setHours(0,0,0,0);
+
+    return Math.ceil((next - today) / (1000 * 60 * 60 * 24));
+  }
+
+  function getStatus(daysLeft) {
+    if (daysLeft < 0) return "danger";
+    if (daysLeft <= 2) return "warning";
+    return "normal";
+  }
+
+  /* ---------- RENDER ---------- */
+
+  function render() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+
+    if (selectedPlantIndex === null) {
+      renderTiles(list);
+    } else {
+      renderDetail(list, selectedPlantIndex);
+    }
+  }
+
+  /* ---------- GRID TILES ---------- */
+
+  function renderTiles(list) {
+
+    const sorted = [...plants].sort((a, b) => {
+      return getDaysLeft(a) - getDaysLeft(b);
+    });
+
+    sorted.forEach((p) => {
+      const i = plants.indexOf(p);
+      const daysLeft = getDaysLeft(p);
+      const status = getStatus(daysLeft);
+
+      let label = daysLeft < 0
+        ? `-${Math.abs(daysLeft)}d`
+        : `${daysLeft}d`;
+
+      const el = document.createElement("div");
+      el.className = `card ${status}`;
+
+      el.innerHTML = `
+      <div class="title">${p.name}</div>
+      <div class="status">${label}</div>
+    `;
+
+      el.onclick = () => {
+        selectedPlantIndex = i;
+        render();
+      };
+
+      list.appendChild(el);
+    });
+  }
+
+  /* ---------- DETAIL ---------- */
+
+  function renderDetail(list, i) {
+    const p = plants[i];
+
+    const next = new Date(p.lastWatering);
+    next.setDate(next.getDate() + p.interval);
+
+    const el = document.createElement("div");
+    el.className = "card normal";
+
+    el.innerHTML = `
+    <div class="title">${p.name}</div>
+
+    <div class="meta">Last: ${p.lastWatering}</div>
+    <div class="meta">Interval: ${p.interval} days</div>
+    <div class="meta">Next: ${next.toISOString().split("T")[0]}</div>
+
+    <input id="editInterval" type="number" placeholder="новый интервал">
+
+    <button class="save-btn" onclick="updateInterval(${i})">изменить интервал</button>
+    <button class="water-btn" onclick="water(${i})">полила!</button>
+    <button class="delete-btn" onclick="deletePlant(${i})">удалить</button>
+    <button class="back-btn" onclick="back()">← Back</button>
+  `;
+
+    list.appendChild(el);
+  }
+
+
+  function addPlant() {
+    const name = document.getElementById("name").value;
+    const days = parseInt(document.getElementById("days").value);
+
+    let lastWatering = document.getElementById("lastWatering").value;
+    if (!lastWatering) {
+      lastWatering = new Date().toISOString().split("T")[0];
+    }
+
+    plants.push({
+      name,
+      interval: days,
+      lastWatering
+    });
+
+    save();
+    render();
+  }
+
+  function water(i) {
+    plants[i].lastWatering = new Date().toISOString().split("T")[0];
+    save();
+    render();
+  }
+
+  function updateInterval(i) {
+    const val = parseInt(document.getElementById("editInterval").value);
+
+    if (!val || val <= 0) return;
+
+    plants[i].interval = val;
+    save();
+    render();
+  }
+
+  function deletePlant(i) {
+    const confirmation = window.confirm("удалить цветок")
+    if (confirmation) {
+      plants.splice(i, 1);
+      save();
+      selectedPlantIndex = null;
+      render();
+    }
+  }
+
+  function back() {
+    selectedPlantIndex = null;
+    render();
+  }
+
+  render();
+</script>
+
+</body>
+</html>
