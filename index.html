@@ -6,6 +6,8 @@
   <title>Plants</title>
 
   <style>
+    * { box-sizing: border-box; }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Arial;
       margin: 0;
@@ -40,7 +42,6 @@
       border: 1px solid #e5e5ea;
       border-radius: 10px;
       font-size: 16px;
-      box-sizing: border-box;
     }
 
     button {
@@ -60,10 +61,6 @@
     .save-btn { background: #007aff; }
     .delete-btn { background: #ff3b30; }
 
-    * {
-      box-sizing: border-box;
-    }
-    
     #list {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -74,7 +71,6 @@
       border-radius: 16px;
       padding: 12px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-      transition: transform 0.1s ease;
       min-height: 80px;
     }
 
@@ -93,28 +89,28 @@
       font-weight: 600;
     }
 
-    .normal { background: white; }
-    .warning { background: #fff6d6; }
-    .danger { background: #ffe5e5; }
-
     .meta {
       font-size: 14px;
       color: #666;
       margin-top: 4px;
     }
+
+    .normal { background: white; }
+    .warning { background: #fff6d6; }
+    .danger { background: #ffe5e5; }
   </style>
 </head>
 
 <body>
 
 <div class="container">
-  <h2>Ольикины цветулечечки</h2>
+  <h2>Plants</h2>
 
   <div class="input-card">
-    <input id="name" placeholder="цветок" />
-    <input id="days" type="number" placeholder="интервал полива" />
+    <input id="name" placeholder="plant name" />
+    <input id="days" type="number" placeholder="interval (days)" />
     <input id="lastWatering" type="date" />
-    <button class="add-btn" onclick="addPlant()">добавить</button>
+    <button class="add-btn" onclick="addPlant()">add</button>
   </div>
 
   <div id="list"></div>
@@ -122,7 +118,7 @@
 
 <script>
   let plants = JSON.parse(localStorage.getItem("plants") || "[]");
-  let selectedPlantIndex = null;
+  let selectedId = null;
 
   function save() {
     localStorage.setItem("plants", JSON.stringify(plants));
@@ -130,7 +126,7 @@
 
   function getDaysLeft(p) {
     const next = new Date(p.lastWatering);
-    next.setDate(next.getDate() + p.interval);
+    next.setDate(next.getDate() + (p.interval + 1));
 
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -145,46 +141,34 @@
     return "normal";
   }
 
-  /* ---------- RENDER ---------- */
-
   function render() {
     const list = document.getElementById("list");
     list.innerHTML = "";
 
-    if (selectedPlantIndex === null) {
-      renderTiles(list);
+    if (selectedId === null) {
+      renderGrid(list);
     } else {
-      renderDetail(list, selectedPlantIndex);
+      renderDetail(list);
     }
   }
 
-  /* ---------- GRID TILES ---------- */
+  function renderGrid(list) {
+    const sorted = [...plants].sort((a, b) => getDaysLeft(a) - getDaysLeft(b));
 
-  function renderTiles(list) {
-
-    const sorted = [...plants].sort((a, b) => {
-      return getDaysLeft(a) - getDaysLeft(b);
-    });
-
-    sorted.forEach((p) => {
-      const i = plants.indexOf(p);
+    sorted.forEach(p => {
       const daysLeft = getDaysLeft(p);
       const status = getStatus(daysLeft);
-
-      let label = daysLeft < 0
-        ? `-${Math.abs(daysLeft)}d`
-        : `${daysLeft}d`;
 
       const el = document.createElement("div");
       el.className = `card ${status}`;
 
       el.innerHTML = `
-      <div class="title">${p.name}</div>
-      <div class="status">${label}</div>
-    `;
+        <div class="title">${p.name}</div>
+        <div class="status">${daysLeft}d</div>
+      `;
 
       el.onclick = () => {
-        selectedPlantIndex = i;
+        selectedId = p.id;
         render();
       };
 
@@ -192,10 +176,8 @@
     });
   }
 
-  /* ---------- DETAIL ---------- */
-
-  function renderDetail(list, i) {
-    const p = plants[i];
+  function renderDetail(list) {
+    const p = plants.find(x => x.id === selectedId);
 
     const next = new Date(p.lastWatering);
     next.setDate(next.getDate() + p.interval);
@@ -204,23 +186,22 @@
     el.className = "card normal";
 
     el.innerHTML = `
-    <div class="title">${p.name}</div>
+      <div class="title">${p.name}</div>
 
-    <div class="meta">Last: ${p.lastWatering}</div>
-    <div class="meta">Interval: ${p.interval} days</div>
-    <div class="meta">Next: ${next.toISOString().split("T")[0]}</div>
+      <div class="meta">Last: ${p.lastWatering}</div>
+      <div class="meta">Interval: ${p.interval} days</div>
+      <div class="meta">Next: ${next.toISOString().split("T")[0]}</div>
 
-    <input id="editInterval" type="number" placeholder="новый интервал">
+      <input id="editInterval" type="number" placeholder="new interval">
 
-    <button class="save-btn" onclick="updateInterval(${i})">изменить интервал</button>
-    <button class="water-btn" onclick="water(${i})">полила!</button>
-    <button class="delete-btn" onclick="deletePlant(${i})">удалить</button>
-    <button class="back-btn" onclick="back()">← Back</button>
-  `;
+      <button class="save-btn" onclick="updateInterval()">change interval</button>
+      <button class="water-btn" onclick="water()">watered</button>
+      <button class="delete-btn" onclick="deletePlant()">delete</button>
+      <button class="back-btn" onclick="back()">back</button>
+    `;
 
     list.appendChild(el);
   }
-
 
   function addPlant() {
     const name = document.getElementById("name").value;
@@ -232,6 +213,7 @@
     }
 
     plants.push({
+      id: crypto.randomUUID(),
       name,
       interval: days,
       lastWatering
@@ -241,34 +223,36 @@
     render();
   }
 
-  function water(i) {
-    plants[i].lastWatering = new Date().toISOString().split("T")[0];
+  function water() {
+    const p = plants.find(x => x.id === selectedId);
+    p.lastWatering = new Date().toISOString().split("T")[0];
     save();
     render();
+    back();
   }
 
-  function updateInterval(i) {
+  function updateInterval() {
+    const p = plants.find(x => x.id === selectedId);
     const val = parseInt(document.getElementById("editInterval").value);
 
     if (!val || val <= 0) return;
 
-    plants[i].interval = val;
+    p.interval = val;
     save();
     render();
   }
 
-  function deletePlant(i) {
-    const confirmation = window.confirm("удалить цветок")
-    if (confirmation) {
-      plants.splice(i, 1);
-      save();
-      selectedPlantIndex = null;
-      render();
-    }
+  function deletePlant() {
+    if (!confirm("delete plant?")) return;
+
+    plants = plants.filter(x => x.id !== selectedId);
+    selectedId = null;
+    save();
+    render();
   }
 
   function back() {
-    selectedPlantIndex = null;
+    selectedId = null;
     render();
   }
 
